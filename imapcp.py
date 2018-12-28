@@ -206,7 +206,9 @@ class main(ImapUtil):
             print("Found", len(srcids), "messages in source folder")
 
             # Sync data
+            i = 0
             for sid in srcids:
+                i += 1
                 # Check for date filter
                 if fr or to:
                     h = self.getHeaders(srcconn, sid)
@@ -224,12 +226,26 @@ class main(ImapUtil):
                 mid = self.getMessageId(srcconn, sid)
                 if not mid in dstmexids:
                     # Message not found, syncing it
-                    print("Copying message", mid)
+                    print("Copying message (", i, "/", len(srcids), ")", mid)
                     if not options.simulate:
-                        mex = self.getMessage(srcconn, sid)
-                        dstconn.append(dstfolder, None, None, mex)
+                        try:
+                            mex = self.getMessage(srcconn, sid)
+                            dstconn.append(dstfolder, None, None, mex)
+                        except dstconn.abort:
+                            # Reconnect the destination server after error
+                            print("Reconnect destination")
+                            dstconn.logout()
+
+                            if dst['port'] == 993:
+                                dstconn = imaplib.IMAP4_SSL(dst['host'], dst['port'])
+                            else:
+                                dstconn = imaplib.IMAP4(dst['host'], dst['port'])
+
+                            dstconn.login(dst['user'], dst['pass'])
+                            mex = self.getMessage(srcconn, sid)
+                            dstconn.append(dstfolder, None, None, mex)
                 else:
-                    print("Skipping message", mid)
+                    print("Skipping message (", i, "/", len(srcids), ")", mid)
 
         # Logout
         srcconn.logout()
